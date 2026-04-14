@@ -9,6 +9,7 @@ from functools import lru_cache
 import chromadb
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.embeddings import Embeddings
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from sentence_transformers import SentenceTransformer
@@ -146,6 +147,19 @@ def flatten_exception_text(exc: Exception) -> str:
         parts.append(str(current))
         current = current.__cause__ or current.__context__
     return " | ".join(p for p in parts if p).lower()
+
+
+class SentenceTransformerEmbeddingsAdapter(Embeddings):
+    """Adapts SentenceTransformer to LangChain's embeddings interface."""
+
+    def __init__(self, model: SentenceTransformer):
+        self.model = model
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self.model.encode(texts).tolist()
+
+    def embed_query(self, text: str) -> list[float]:
+        return self.model.encode([text])[0].tolist()
 
 
 def build_llm():
@@ -553,10 +567,15 @@ def generate_baseline_records() -> list[dict]:
     for idx, sample in enumerate(build_ragas_baseline_samples(), start=1):
         thread_id = f"baseline_{idx}"
         result = ask(sample["question"], thread_id)
+        retrieved_contexts = [chunk for chunk in result["retrieved"].split("\n\n---\n\n") if chunk.strip()]
         records.append({
+            "user_input": sample["question"],
+            "response": result["answer"],
+            "retrieved_contexts": retrieved_contexts,
+            "reference": sample["ground_truth"],
             "question": sample["question"],
             "answer": result["answer"],
-            "contexts": result["retrieved"],
+            "contexts": retrieved_contexts,
             "ground_truth": sample["ground_truth"],
             "faithfulness": result["faithfulness"],
         })
@@ -571,9 +590,13 @@ def run_ragas_baseline() -> dict:
         from ragas.metrics import answer_relevancy, context_precision, faithfulness
 
         dataset = Dataset.from_list(records)
+        eval_llm = build_llm()
+        eval_embeddings = SentenceTransformerEmbeddingsAdapter(SentenceTransformer("all-MiniLM-L6-v2"))
         result = evaluate(
             dataset=dataset,
             metrics=[faithfulness, answer_relevancy, context_precision],
+            llm=eval_llm,
+            embeddings=eval_embeddings,
         )
         df = result.to_pandas()
         return {
@@ -583,7 +606,7 @@ def run_ragas_baseline() -> dict:
             "context_precision": float(df["context_precision"].mean()),
             "records": records,
         }
-    except ImportError:
+    except Exception as e:
         avg_faithfulness = sum(r["faithfulness"] for r in records) / len(records)
         return {
             "mode": "manual",
@@ -591,6 +614,7 @@ def run_ragas_baseline() -> dict:
             "answer_relevancy": None,
             "context_precision": None,
             "records": records,
+            "ragas_error": f"{type(e).__name__}: {e}",
         }
 
 
