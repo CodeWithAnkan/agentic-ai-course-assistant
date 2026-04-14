@@ -1,0 +1,108 @@
+import chromadb
+from sentence_transformers import SentenceTransformer
+
+DOCS = [
+    {
+        "id": "doc_001",
+        "topic": "Day 1: LLM APIs and first Agent",
+        "text": "The course begins with the fundamentals of LLM APIs using Groq and Google Gemini. Students learn to build their first AI agent using the 'smolagents' framework, specifically the CodeAgent and ToolCallingAgent classes. A key focus is the ReAct pattern (Reasoning and Acting), where the model generates a thought process before executing a code-based or function-based tool. Students use a custom 'AgentLLM' wrapper class to standardize API calls across providers like Groq (Llama 3.3) and Hugging Face. The environment setup is critical, involving the management of API keys for Google, Groq, and Hugging Face. By the end of this session, students have an agent capable of performing web searches using DuckDuckGo and processing the results through a reasoning loop. The session highlights that agents are more than simple chatbots; they are systems that can interact with the digital world through tools."
+    },
+    {
+        "id": "doc_002",
+        "topic": "Day 2: Tool Calling & Function Agents",
+        "text": "Day 2 focuses on how LLMs interact with external environments via tool calling, moving beyond raw text generation. Students explore the function calling mechanism where the LLM outputs structured JSON that maps directly to Python functions. A critical takeaway is the 'Brain vs. Hands' analogy: the LLM acts as the brain (deciding what to do), while the Python runtime acts as the hands (executing the code). Tools are created using the @tool decorator, which requires clear docstrings and type hints because these are the only instructions the LLM receives to understand when and how to use a tool. The session covers building multi-tool agents that can chain actions together, such as fetching data from a calculator and then summarizing the result. Error handling within tools is emphasized—tools should return error strings rather than crashing the runtime, allowing the agent to 'see' the error and attempt a correction in the next reasoning step."
+    },
+    {
+        "id": "doc_003",
+        "topic": "Day 3: Agent Memory Systems",
+        "text": "Memory is defined as the component that transforms a stateless chatbot into a functional, session-aware agent. This document covers the spectrum of memory systems, including short-term memory (ConversationBufferMemory) and long-term memory (vector-based retrieval). Students implement 'Window-based memory' using ConversationSummaryBufferMemory to keep the LLM's context window efficient while retaining a summary of the past dialogue. The technical implementation involves managing message history lists and ensuring that the most recent N-turns are passed to the model. Without memory, every query is a 'first-time' interaction; with memory, the agent can handle coreference resolution (e.g., 'What did I just say?') and maintain user preferences. The session also touches upon persistence—saving this memory to a database so the agent can recognize the user across different sessions, which is a foundational step for personalized AI assistants."
+    },
+    {
+        "id": "doc_004",
+        "topic": "Day 4: Embeddings and RAG Foundations",
+        "text": "Retrieval-Augmented Generation (RAG) is introduced as the primary solution to LLM hallucinations and the knowledge cut-off problem. The workflow is strictly defined: Chunking (breaking documents into manageable pieces), Embedding (converting text to numerical vectors using SentenceTransformers like 'all-MiniLM-L6-v2'), and Indexing (storing vectors in ChromaDB). Semantic search replaces keyword matching, allowing the system to find 'similar' concepts even if the exact words differ. Students learn to use the LangChain Chroma integration to add and query documents. A core concept is the 'RAG Prompt,' which instructs the LLM to answer *only* using the provided context. If the answer isn't in the context, the LLM must state it doesn't know, preventing it from making up facts. This session also covers the importance of chunk overlap to ensure context isn't lost at the boundaries of text splits."
+    },
+    {
+        "id": "doc_005",
+        "topic": "Day 5: LangChain Framework Deep Dive",
+        "text": "LangChain is explored as the industry-standard orchestration layer for building LLM applications. Students dive into the LangChain Expression Language (LCEL), which uses the pipe (|) operator to chain components like PromptTemplates, ChatModels, and OutputParsers. Key abstractions include 'Runnables,' which provide a standard interface for streaming, async support, and batching. The session demonstrates how to build a flexible research assistant that can route queries between different chains based on user intent. Students also learn about the 'AgentExecutor' (now being succeeded by LangGraph but still vital for understanding loops) and how it handles the interaction between the LLM and its tools. Debugging LangChain is emphasized using 'verbose=True' and tracing tools like LangSmith to see exactly what is being sent to the model and what is coming back."
+    },
+    {
+        "id": "doc_006",
+        "topic": "Day 6: Multi-Agent Systems with CrewAI",
+        "text": "Multi-agent systems improve performance by delegating complex tasks to a group of specialized agents, much like a human corporate team. CrewAI is the framework used to implement this role-based architecture. A 'Crew' consists of Agents (defined by Roles, Goals, and Backstories), Tasks (specific instructions with expected outputs), and a Process (usually Sequential or Hierarchical). This session guides students through building a content creation crew: a Researcher finds facts, a Writer drafts a blog post, and an Editor checks for quality. By separating concerns, each agent can be given a specific persona and a limited set of tools, which reduces the 'confusion' an LLM might face if tasked with doing everything alone. Students learn that the 'Backstory' is essentially a specialized system prompt that shapes the agent's behavior and tone."
+    },
+    {
+        "id": "doc_007",
+        "topic": "Day 7: Advanced CrewAI Patterns",
+        "text": "Advanced multi-agent coordination involves more than just passing text from one agent to another. This session covers 'Context Passing,' where a task can explicitly depend on the output of multiple previous tasks. Students implement 'Structured Outputs' using Pydantic models to ensure that the CrewAI agents return valid JSON rather than free-form text. The use of 'Manager Agents' is introduced for hierarchical workflows where one LLM (the manager) decides which specialist agent should handle the next step. Students also explore 'Memory=True' and 'Cache=True' in CrewAI to allow agents to learn from their own interactions within a single kickoff and to prevent redundant API calls for identical tasks. This session is critical for building enterprise-ready agent teams that need to produce consistent, machine-readable results."
+    },
+    {
+        "id": "doc_008",
+        "topic": "Day 8: LangGraph Stateful Workflows",
+        "text": "LangGraph is introduced as a more powerful alternative to sequential chains, specifically designed for circular and stateful workflows. Unlike CrewAI or standard LangChain, LangGraph treats the agentic process as a directed graph where nodes are functions and edges define the flow. The core of LangGraph is the 'State,' usually a TypedDict that stores the conversation history and intermediate results. Students learn the 4-step pattern: Define the State, Write Node functions, Build the Graph (add nodes and edges), and Compile. A major feature covered is 'Human-in-the-loop,' where the graph can be configured to pause at a specific node (like a 'payment' or 'approval' step) and wait for a user to provide input before resuming. This session provides the technical foundation for building high-reliability agents that don't just 'run away' but can be steered by humans."
+    },
+    {
+        "id": "doc_009",
+        "topic": "Day 9: Autonomous Agents & Self-Reflection",
+        "text": "This session focuses on agents that can evaluate and improve their own performance. Students implement the 'Reflexion' pattern, where an agent generates a draft, an 'Evaluator' agent critiques it, and the original agent iterates until the quality meets a threshold. Another key pattern is 'ReWOO' (Reasoning Without Observation), which separates the planning of tool calls from their execution to reduce latency and token usage. Students build an 'Autonomous Research Agent' that uses these patterns to perform deep dives into topics without user intervention. The technical implementation involves conditional edges in LangGraph that check for a 'score' or 'iteration count' to decide whether to continue the loop or finish. This session demonstrates that 'Agentic' behavior often comes from the architecture of the loop, not just the power of the LLM."
+    },
+    {
+        "id": "doc_010",
+        "topic": "Day 10: RAG + Memory Inside LangGraph",
+        "text": "Day 10 combines retrieval and memory into a single stateful LangGraph application. Students build a 'Smart Course Assistant' that can decide whether to answer from its memory (for follow-up questions) or query ChromaDB (for new technical questions). This requires a 'Query Router' node that analyzes the user input to determine the intent. The technical setup involves a 'retriever_node' and a 'memory_node'. A sliding window approach is used for memory—only the last N messages are kept to save tokens. The retrieved context is formatted into the system prompt of the generation node. This represents the 'Gold Standard' architecture for production-grade assistants, as it handles both multi-turn conversation and grounded knowledge retrieval seamlessly within a structured, traceable graph."
+    },
+    {
+        "id": "doc_011",
+        "topic": "Day 11: Agent Evaluation & RAGAS",
+        "text": "Evaluation is the process of moving from 'it seems to work' to 'it actually works.' This session introduces the RAGAS framework (Retrieval-Augmented Generation Assessment). Students measure three core metrics: Faithfulness (is the answer based on the context?), Answer Relevance (does it address the user query?), and Context Precision (was the retrieved chunk actually useful?). The workflow involves creating a test dataset of questions and ground-truth answers. Students implement an 'Evaluation Node' inside LangGraph that acts as an automated quality gate; if an agent's answer has a low faithfulness score (measured by an LLM-as-a-judge), the graph can automatically trigger a 'retry' or ask the agent to re-retrieve. This session also covers 'Red-Teaming'—intentionally trying to break the agent with irrelevant or hostile queries to identify failure modes."
+    },
+    {
+        "id": "doc_012",
+        "topic": "Day 12: Deployment with Streamlit & FastAPI",
+        "text": "Day 12 focuses on taking the LangGraph agent out of the notebook and into a real application. Students learn two deployment paths: Streamlit for rapid UI prototyping and FastAPI for building production-grade backend APIs. In Streamlit, students implement 'Streaming' to provide a word-by-word ChatGPT-like experience using the 'astream' method from LangGraph. For FastAPI, students build endpoints that can be called by other software, including features like API key authentication for security. A key architectural lesson is that the agent logic (the .py file containing the graph) remains identical; only the wrapper around it changes. This separation of concerns allows for easy updates—improving the graph logic automatically updates both the UI and the API. Students also learn about 'Thread Management'—using unique thread IDs to ensure that different users don't see each other's chat histories."
+    },
+    {
+        "id": "doc_013",
+        "topic": "Day 13: Capstone - Production Agentic Systems",
+        "text": "The final session is the Capstone Project, where students must build a fully functional system that demonstrates all mandatory capabilities: a LangGraph StateGraph with 3+ nodes, a ChromaDB knowledge base with 10+ documents, conversation memory with persistence, a self-reflection loop, and deployment via Streamlit. Students are encouraged to pick a domain (like a KIIT Study Buddy or an HR Bot) and apply everything they've learned. The checklist for a successful capstone includes a robust test suite of 10+ questions, recorded RAGAS baseline scores, and a working UI that can handle multi-turn conversations. This session emphasizes the 'System' aspect of AI—showing that building a reliable agent is an engineering challenge involving retrieval, logic, evaluation, and user experience, not just a prompting task."
+    },
+]
+
+
+def build_knowledge_base() -> chromadb.Collection:
+    embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    client = chromadb.Client()
+    collection = client.create_collection("course_kb")
+
+    texts = [d["text"] for d in DOCS]
+    embeddings = embedder.encode(texts).tolist()
+
+    collection.add(
+        documents=texts,
+        embeddings=embeddings,
+        ids=[d["id"] for d in DOCS],
+        metadatas=[{"topic": d["topic"]} for d in DOCS],
+    )
+    print(f"[KB] Loaded {len(DOCS)} documents into ChromaDB.")
+    return collection, embedder
+
+
+def retrieval_test(collection: chromadb.Collection, embedder: SentenceTransformer):
+    test_queries = [
+        "What is the ReAct pattern?",
+        "How does RAG prevent hallucinations?",
+        "What is LangGraph State?",
+    ]
+    print("\n[KB] Retrieval test:")
+    for q in test_queries:
+        emb = embedder.encode([q]).tolist()
+        results = collection.query(query_embeddings=emb, n_results=2)
+        topics = [m["topic"] for m in results["metadatas"][0]]
+        print(f"  Q: {q}")
+        print(f"  -> {topics}\n")
+
+
+if __name__ == "__main__":
+    collection, embedder = build_knowledge_base()
+    retrieval_test(collection, embedder)
